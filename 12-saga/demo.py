@@ -27,11 +27,11 @@ class Saga:
 
     def run(self, fail_at=None):
         completed = []
-        print(f"  forward:")
+        print("  forward:")
         for idx, step in enumerate(self.steps, 1):
             if fail_at == idx:
                 print(f"    {idx}. {step.name} ... FAILED")
-                print(f"  compensating (reverse order):")
+                print("  compensating (reverse order):")
                 for done in reversed(completed):
                     done.undo()
                     print(f"    undo {done.name}")

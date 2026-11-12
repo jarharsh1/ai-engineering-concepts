@@ -26,5 +26,8 @@ multi-vector search in modern RAG stacks.
 python 13-colbert-late-interaction/demo.py
 ```
 Compares MaxSim over per-token vectors against single averaged-vector cosine on a
-query + 2 docs. Uses deterministic toy per-token vectors as a fallback, or NIM
-per-token embeddings if a key is set — showing MaxSim rewards token-level matches.
+query + 2 docs. Doc A contains the exact query terms; Doc B is a *near-miss* that
+is topically similar but shares no exact tokens. With the offline toy vectors,
+single-vector cosine is **fooled into picking Doc B** while MaxSim correctly picks
+Doc A — the precise point of late interaction. Set `NVIDIA_API_KEY` to run it with
+real NIM per-token embeddings instead.

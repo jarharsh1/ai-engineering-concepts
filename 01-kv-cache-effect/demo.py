@@ -42,10 +42,14 @@ def main() -> None:
     print("Concurrency vs memory (OK -> OOM):")
     print(f"  {'users':>6} | {'kv_used_GB':>10} | status")
     print(f"  {'-'*6}-+-{'-'*10}-+-------")
-    for users in [8, 16, 32, 64, 80, 96, 128]:
+    # Include the exact boundary (max_users and max_users+1) so the OK->OOM flip
+    # lands where the computed limit says it should, not between coarse rounds.
+    rows = sorted({8, 16, max_users, max_users + 1, 64, 96, 128})
+    for users in rows:
         used = users * per_user
         status = "OK" if used <= kv_budget else "OOM  <-- crash"
-        print(f"  {users:>6} | {used/1024**3:>10.1f} | {status}")
+        marker = "  <-- limit" if users == max_users else ""
+        print(f"  {users:>6} | {used/1024**3:>10.1f} | {status}{marker}")
 
     print(
         "\nTakeaway: doubling context or doubling users both double KV memory. "
