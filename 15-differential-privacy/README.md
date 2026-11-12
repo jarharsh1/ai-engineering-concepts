@@ -26,6 +26,8 @@ aggregation, and federated learning.
 ```bash
 python 15-differential-privacy/demo.py
 ```
-Applies the Laplace mechanism to a private mean over ~500 values and shows the
-output barely changes whether or not one outlier ("Alice") is included, across
-epsilon = 10, 1, 0.1.
+Applies the Laplace mechanism to a private mean over ~500 values. Over many
+independent noise draws it reports the distribution (mean ± std) of the released
+value with vs without one outlier ("Alice") at epsilon = 10, 1, 0.1 — showing the
+noise std grow until it dwarfs Alice's effect and the two distributions overlap
+(she goes from "exposed" at large epsilon to "hidden" at small epsilon).

@@ -24,17 +24,59 @@ from common import nim  # noqa: E402
 import numpy as np
 
 QUERY = "gpu memory oom"
+# Doc A contains the EXACT query terms. Doc B is a near-miss: it is topically
+# about the same area (hardware / resource errors) so its *averaged* vector
+# looks similar to the query, but it never uses the exact query tokens. This is
+# the case where single-vector cosine is fooled and only MaxSim gets it right.
 DOCS = {
-    "A": "the server crashed with a gpu out of memory oom error under load",
-    "B": "our quarterly marketing report covers social media engagement metrics",
+    "A": "the gpu ran out of memory and threw an oom error while the model loaded",
+    "B": "the hardware hit a resource crash when the compute device overloaded",
+}
+
+# Interpretable toy embeddings: each token is placed in a small concept space so
+# that topically-related tokens have HIGH cosine but are NOT identical. Exact
+# token identity still gives cosine 1.0 (a token matches itself). This lets us
+# construct an honest near-miss instead of relying on opaque hash vectors.
+CONCEPTS = ["hardware", "memory_res", "failure", "filler"]
+
+# token -> weights over CONCEPTS (unnormalized; _unit() normalizes later).
+TOKEN_CONCEPTS = {
+    # query tokens
+    "gpu":      {"hardware": 1.0, "memory_res": 0.2},
+    "memory":   {"memory_res": 1.0, "hardware": 0.2},
+    "oom":      {"failure": 1.0, "memory_res": 0.6},
+    # Doc A exact matches reuse the same vectors as the query tokens above.
+    # Doc B near-miss tokens: close to the query concepts but never identical.
+    "hardware": {"hardware": 1.0, "failure": 0.3},
+    "resource": {"memory_res": 0.7, "hardware": 0.4},
+    "crash":    {"failure": 0.9, "hardware": 0.35},
+    "compute":  {"hardware": 0.9, "memory_res": 0.3},
+    "device":   {"hardware": 0.85, "memory_res": 0.25},
+    "overloaded": {"failure": 0.7, "memory_res": 0.3, "hardware": 0.3},
+    "hit":      {"failure": 0.5, "filler": 0.6},
+    # shared/filler words (push averages toward a neutral 'filler' axis)
+    "the": {"filler": 1.0}, "and": {"filler": 1.0}, "an": {"filler": 1.0},
+    "of": {"filler": 1.0}, "out": {"filler": 1.0}, "ran": {"filler": 1.0},
+    "threw": {"failure": 0.4, "filler": 0.7}, "error": {"failure": 0.7, "filler": 0.3},
+    "while": {"filler": 1.0}, "model": {"filler": 0.8, "hardware": 0.2},
+    "loaded": {"filler": 0.8, "hardware": 0.2}, "a": {"filler": 1.0},
+    "when": {"filler": 1.0},
 }
 
 
-def toy_vec(token, dim=16):
-    """Deterministic pseudo-embedding for a token (offline fallback)."""
-    h = hashlib.sha256(token.encode()).digest()
-    v = np.frombuffer(h, dtype=np.uint8)[:dim].astype(float)
-    v = v - v.mean()
+def toy_vec(token, dim=len(CONCEPTS)):
+    """Interpretable concept-space embedding for a token (offline fallback).
+
+    Unknown tokens fall back to a deterministic hashed vector so the demo never
+    crashes on vocabulary it hasn't been told about.
+    """
+    weights = TOKEN_CONCEPTS.get(token)
+    if weights is not None:
+        v = np.array([weights.get(c, 0.0) for c in CONCEPTS], dtype=float)
+    else:
+        h = hashlib.sha256(token.encode()).digest()
+        v = np.frombuffer(h, dtype=np.uint8)[:dim].astype(float)
+        v = v - v.mean()
     n = np.linalg.norm(v)
     return v / n if n else v
 

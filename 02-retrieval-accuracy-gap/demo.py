@@ -82,7 +82,6 @@ def main():
         print(f"  {rank}. [{s:.3f}] {DOCS[i]}")
 
     reranked = rerank(QUERY, top4)
-    top2 = [i for i, _ in reranked[:2]]
     print("\nStage 2 — cross-encoder-style rerank -> top 2:")
     for rank, (i, s) in enumerate(reranked[:2], 1):
         print(f"  {rank}. [score {s}] {DOCS[i]}")

@@ -17,30 +17,18 @@ CAPACITY = 200
 OFFERED = 500
 
 
-async def handle(sem: asyncio.Semaphore | None, served: list, shed: list, i: int):
-    if sem is None:
-        # accept-all: no admission control
-        await asyncio.sleep(0.001)
-        served.append(i)
-        return
-    if sem.locked() and sem._value == 0:
-        shed.append(i)
-        return
-    acquired = sem._value > 0
-    if not acquired:
-        shed.append(i)
-        return
-    async with sem:
-        await asyncio.sleep(0.001)
-        served.append(i)
-
-
 async def run_bounded():
+    """Admit up to CAPACITY concurrent requests; shed the rest immediately.
+
+    Each offered request tries to grab a slot. `Semaphore.locked()` is True when
+    no slots are free, so we reject (429) without waiting — that fast rejection
+    is the backpressure. Admitted requests hold a slot while they do their work.
+    """
     sem = asyncio.Semaphore(CAPACITY)
     served, shed = [], []
 
     async def worker(i):
-        if sem._value <= 0:
+        if sem.locked():          # all CAPACITY slots currently taken
             shed.append(i)
             return
         async with sem:

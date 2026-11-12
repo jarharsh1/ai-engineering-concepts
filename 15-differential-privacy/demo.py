@@ -6,9 +6,12 @@ one person can shift the output distribution by at most a factor controlled by
 epsilon: small epsilon = strong privacy (more noise), large epsilon = weak
 privacy (less noise).
 
-This demo uses the Laplace mechanism on a private MEAN over ~500 values and shows
-the released mean barely changes whether or not one outlier ("Alice") is
-included, across epsilon = 10, 1, 0.1.
+This demo uses the Laplace mechanism on a private MEAN over ~500 values. Over many
+independent noise draws it shows how the DISTRIBUTION of the released mean (with vs
+without one outlier, "Alice") overlaps as epsilon shrinks: at small epsilon the
+noise spread dwarfs Alice's effect, so the two are indistinguishable. Across
+epsilon = 10, 1, 0.1 you can watch the noise std grow and Alice go from exposed
+to hidden.
 
 No API key needed.
 """
@@ -40,30 +43,45 @@ def main():
     with_alice = np.concatenate([base, alice])
     without_alice = base
 
-    print("=== Differential Privacy (Laplace mechanism on a mean) ===")
-    print(f"n={N} values in [{LOW:.0f},{HIGH:.0f}], Alice is an outlier at {HIGH:.0f}\n")
-
-    print(f"  {'epsilon':>7} | {'released (with Alice)':>21} | "
-          f"{'released (without)':>19} | {'|diff|':>7}")
-    print(f"  {'-'*7}-+-{'-'*21}-+-{'-'*19}-+-{'-'*7}")
-    for eps in [10.0, 1.0, 0.1]:
-        # Use the same noise draw conceptually by reseeding per epsilon for a
-        # fair side-by-side.
-        r1 = np.random.default_rng(100)
-        r2 = np.random.default_rng(100)
-        _, out_with = private_mean(with_alice, eps, r1)
-        _, out_without = private_mean(without_alice, eps, r2)
-        diff = abs(out_with - out_without)
-        print(f"  {eps:>7.1f} | {out_with:>21.4f} | {out_without:>19.4f} | {diff:>7.4f}")
-
     true_with = float(np.mean(with_alice))
     true_without = float(np.mean(without_alice))
-    print(f"\n  (true means: with Alice={true_with:.4f}, without={true_without:.4f})")
+    alice_effect = abs(true_with - true_without)
+
+    print("=== Differential Privacy (Laplace mechanism on a mean) ===")
+    print(f"n={N} values in [{LOW:.0f},{HIGH:.0f}], Alice is an outlier at {HIGH:.0f}")
+    print(f"true mean with Alice={true_with:.4f}, without={true_without:.4f} "
+          f"(Alice shifts it by only {alice_effect:.4f})\n")
+
+    # The honest demonstration: draw INDEPENDENT noise many times for each
+    # dataset and look at the DISTRIBUTION of released values. DP works when the
+    # noise spread swamps Alice's effect, so the two output distributions overlap
+    # and an attacker can't tell which dataset produced a given release.
+    TRIALS = 20000
+    print(f"Each cell is the mean +/- std of the released value over {TRIALS} "
+          f"independent noise draws.\n")
+    print(f"  {'epsilon':>7} | {'noise std':>9} | {'released (with Alice)':>22} | "
+          f"{'released (without)':>22} | overlap?")
+    print(f"  {'-'*7}-+-{'-'*9}-+-{'-'*22}-+-{'-'*22}-+---------")
+    for eps in [10.0, 1.0, 0.1]:
+        r1 = np.random.default_rng(100 + int(eps * 10))
+        r2 = np.random.default_rng(900 + int(eps * 10))
+        outs_with = np.array([private_mean(with_alice, eps, r1)[1] for _ in range(TRIALS)])
+        outs_without = np.array([private_mean(without_alice, eps, r2)[1] for _ in range(TRIALS)])
+        # Laplace std = sqrt(2) * scale = sqrt(2) * sensitivity / eps.
+        noise_std = np.sqrt(2) * ((HIGH - LOW) / N) / eps
+        # Alice is "hidden" once the noise spread dwarfs her effect on the mean.
+        hidden = noise_std > alice_effect
+        tag = "YES (hidden)" if hidden else "no (exposed)"
+        print(f"  {eps:>7.1f} | {noise_std:>9.4f} | "
+              f"{outs_with.mean():>8.4f} +/- {outs_with.std():>7.4f} | "
+              f"{outs_without.mean():>8.4f} +/- {outs_without.std():>7.4f} | {tag}")
 
     print(
-        "\nTakeaway: the released mean is nearly the same whether or not Alice is in "
-        "the data, so an observer can't confidently tell. Smaller epsilon adds more "
-        "noise -> stronger privacy but noisier answers; larger epsilon is the reverse."
+        "\nTakeaway: smaller epsilon -> larger Laplace noise std. Once the noise "
+        "spread dwarfs Alice's tiny effect on the mean, the with/without output "
+        "distributions overlap almost entirely, so an observer cannot confidently "
+        "tell whether Alice was in the data. That overlap IS the privacy guarantee; "
+        "the cost is a noisier (less accurate) released answer."
     )
 
 
